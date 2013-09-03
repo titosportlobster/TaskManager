@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the SportlobsterTask package.
+ *
+ * (c) Lobster Media Ltd
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Sportlobster\Task;
 
 use PDO;
@@ -16,18 +25,38 @@ use Sportlobster\Task\Message;
 class DatabaseManager extends BaseManager
 {
     /**
+     * The default database table name
+     *
+     * @var string
+     */
+    const TABLE = 'sportlobster_task';
+
+    /**
      * @var \Doctrine\DBAL\Driver\Connection
      */
     protected $conn;
+
+    /**
+     * @var string
+     */
+    protected $table;
 
     /**
      * @var \Psr\Log\LoggerInterface
      */
     protected $logger;
 
-    public function __construct(Connection $conn, LoggerInterface $logger = null)
+    /**
+     * Constructor
+     *
+     * @param \Doctrine\DBAL\Driver\Connection $conn   The database connection
+     * @param string                           $table  The databse table name
+     * @param \Psr\Log\LoggerInterface         $logger The logger
+     */
+    public function __construct(Connection $conn, $table = null, LoggerInterface $logger = null)
     {
         $this->conn = $conn;
+        $this->table = $table ?: self::TABLE;
         $this->logger = $logger;
     }
 
@@ -36,7 +65,7 @@ class DatabaseManager extends BaseManager
      */
     public function handle(Message $message)
     {
-        $sql = 'INSERT INTO sl_task (type, body, state, restart_count, created_at, updated_at, started_at, completed_at) VALUES (:type, :body, :state, :restart_count, :created_at, :updated_at, :started_at, :completed_at)';
+        $sql = sprintf('INSERT INTO %s (type, body, state, restart_count, created_at, updated_at, started_at, completed_at) VALUES (:type, :body, :state, :restart_count, :created_at, :updated_at, :started_at, :completed_at)', $this->table);
 
         $stmt = $this->conn->prepare($sql);
 
