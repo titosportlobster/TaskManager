@@ -1,5 +1,5 @@
 {
-    "name": "sportlobster/task",
+    "name": "sportlobster/sportlobster-task",
     "version": "dev",
     "description": "SportlobsterTask is a package helping with the management of task/jobs.",
     "homepage": "https://github.com/sportlobster/SportlobsterTask",
