@@ -24,54 +24,76 @@ class Message
     const STATE_ERROR = 3;
     const STATE_CANCELLED = 4;
 
-    protected $type;
+    protected $attrs;
 
-    protected $body;
+    protected $changedAttrs;
 
-    protected $state;
-
-    protected $restartCount = 0;
-
-    protected $createdAt;
-
-    protected $updatedAt;
-
-    protected $startedAt;
-
-    protected $completedAt;
-
-    public function __construct()
+    public function __construct($attrs = array())
     {
-        $this->createdAt = new \DateTime();
-        $this->updatedAt = new \DateTime();
-        $this->state = self::STATE_OPEN;
+        $this->attrs = array(
+            'id' => null,
+            'type' => null,
+            'body' => null,
+            'state' => null,
+            'restartCount' => null,
+            'createdAt' => null,
+            'updatedAt' => null,
+            'startedAt' => null,
+            'completedAt' => null,
+        );
+
+        $this->setState(self::STATE_OPEN);
+        $this->setRestartCount(0);
+        $this->setCreatedAt(new \DateTime());
+        $this->setUpdatedAt(new \DateTime());
+
+        foreach ($attrs as $attr => $value) {
+            if (!array_key_exists($attr, $this->attrs)) {
+                throw new \InvalidArgumentException(sprintf('Invalid attribute "%s" provided for class %s', $attr, get_class($this)));
+            }
+
+            // call the setter
+            call_user_method_array(sprintf('set%s', ucfirst($attr)), $this, array($value));
+        }
+
+        $this->changedAttrs = array();
+
     }
 
     public function __clone()
     {
-        $this->state = self::STATE_OPEN;
-        $this->startedAt = null;
-        $this->completedAt = null;
+        $this->setId(null);
+        $this->setState(self::STATE_OPEN);
+        $this->setRestartCount(0);
+        $this->setCreatedAt(new \DateTime());
+        $this->setUpdatedAt(new \DateTime());
+        $this->setStartedAt(null);
+        $this->setCompletedAt(null);
 
-        $this->createdAt = new \DateTime();
-        $this->updatedAt = new \DateTime();
+        $this->changedAttrs = array();
     }
 
-    /**
-     * @param  array $body
-     * @return array
-     */
-    public function setBody(array $body)
+    public function __call($name, $arguments)
     {
-        $this->body = $body;
-    }
+        if ('set' === substr($name, 0, 3)
+            && in_array(lcfirst(substr($name, 3)), array_keys($this->attrs))
+            && count($arguments) === 1
+        ) {
+            $attr = lcfirst(substr($name, 3));
+            if ($this->attrs[$attr] !== $arguments[0]) {
+                $this->changedAttrs[$attr] = $this->attrs[$attr];
+            }
+            $this->attrs[$attr] = $arguments[0];
 
-    /**
-     * @return array
-     */
-    public function getBody()
-    {
-        return $this->body;
+            return;
+        } elseif ('get' === substr($name, 0, 3)
+            && in_array(lcfirst(substr($name, 3)), array_keys($this->attrs))
+            && count($arguments) === 0
+        ) {
+            return $this->attrs[lcfirst(substr($name, 3))];
+        }
+
+        throw new \BadMethodCallException(sprintf('Call to undefined method "%s" for instance of class %s.', $name, get_class($this)));
     }
 
     /**
@@ -98,106 +120,6 @@ class Message
     }
 
     /**
-     * @param  \DateTime $completedAt
-     * @return void
-     */
-    public function setCompletedAt(\DateTime $completedAt = null)
-    {
-        $this->completedAt = $completedAt;
-    }
-
-    /**
-     * @return \DateTime
-     */
-    public function getCompletedAt()
-    {
-        return $this->completedAt;
-    }
-
-    /**
-     * @param  \DateTime $createdAt
-     * @return void
-     */
-    public function setCreatedAt(\DateTime $createdAt = null)
-    {
-        $this->createdAt = $createdAt;
-    }
-
-    /**
-     * @return \DateTime
-     */
-    public function getCreatedAt()
-    {
-        return $this->createdAt;
-    }
-
-    /**
-     * @param  string $type
-     * @return void
-     */
-    public function setType($type)
-    {
-        $this->type = $type;
-    }
-
-    /**
-     * @return string
-     */
-    public function getType()
-    {
-        return $this->type;
-    }
-
-    /**
-     * @param  integer $state
-     * @return void
-     */
-    public function setState($state)
-    {
-        $this->state = $state;
-    }
-
-    /**
-     * @return integer
-     */
-    public function getState()
-    {
-        return $this->state;
-    }
-
-    /**
-     * @param integer $restartCount
-     */
-    public function setRestartCount($restartCount)
-    {
-        $this->restartCount = $restartCount;
-    }
-
-    /**
-     * @return integer
-     */
-    public function getRestartCount()
-    {
-        return $this->restartCount;
-    }
-
-    /**
-     * @param \DateTime $updatedAt
-     */
-    public function setUpdatedAt(\DateTime $updatedAt = null)
-    {
-        $this->updatedAt = $updatedAt;
-    }
-
-    /**
-     * @return \DateTime
-     */
-    public function getUpdatedAt()
-    {
-        return $this->updatedAt;
-    }
-
-    /**
      * @return array
      */
     public static function getStateList()
@@ -209,23 +131,6 @@ class Message
             self::STATE_ERROR => 'error',
             self::STATE_CANCELLED => 'cancelled'
         );
-    }
-
-    /**
-     * @param  \DateTime $startedAt
-     * @return void
-     */
-    public function setStartedAt(\DateTime $startedAt = null)
-    {
-        $this->startedAt = $startedAt;
-    }
-
-    /**
-     * @return \DateTime
-     */
-    public function getStartedAt()
-    {
-        return $this->startedAt;
     }
 
     /**
@@ -260,5 +165,25 @@ class Message
     public function isOpen()
     {
         return $this->state == self::STATE_OPEN;
+    }
+
+    /**
+     * Returns the changed attributes with teir previous values
+     *
+     * @return array
+     */
+    public function getChangedAttributes()
+    {
+        return $this->changedAttrs;
+    }
+
+    /**
+     * Returns the names of the changed attributes
+     *
+     * @return array
+     */
+    public function getChangedAttributeNames()
+    {
+        return array_keys($this->changedAttrs);
     }
 }

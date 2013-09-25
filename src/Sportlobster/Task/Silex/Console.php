@@ -14,7 +14,6 @@ namespace Sportlobster\Task\Silex;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Doctrine\DBAL\Driver\Connection;
 use Sportlobster\Task\DatabaseManager;
@@ -63,16 +62,20 @@ class Console
                 $output->writeln(sprintf('Creating table "%s".', $table));
                 $sql = <<<EOSQL
                 CREATE TABLE `%1\$s` (
+                  `id` bigint(20) NOT NULL AUTO_INCREMENT,
                   `type` varchar(32) NOT NULL,
                   `body` longtext NOT NULL COMMENT 'JSON encoded data',
-                  `state` tinyint(3) unsigned NOT NULL DEFAULT '0' COMMENT '0: open; 1: in progress; 2: done; -1: error; -2: cancelled',
+                  `state` tinyint(3) unsigned NOT NULL DEFAULT '0' COMMENT '0: open; 1: in progress; 2: done; 3: error; 4: cancelled',
                   `restart_count` tinyint(4) NOT NULL DEFAULT '0',
                   `created_at` datetime NOT NULL,
                   `updated_at` datetime NOT NULL,
                   `started_at` datetime DEFAULT NULL,
                   `completed_at` datetime DEFAULT NULL,
+                  PRIMARY KEY (`id`),
                   KEY `%1\$s_type_idx` (`type`),
-                  KEY `%1\$s_type_state_idx` (`type`, `state`)
+                  KEY `%1\$s_type_state_idx` (`type`, `state`),
+                  KEY `%1\$s_type_state_restart_count_idx` (`type`, `state`, `restart_count`),
+                  KEY `%1\$s_type_state_restart_count_id_idx` (`type`, `state`, `restart_count`, `id`)
                 )
 EOSQL;
                 $conn->exec(sprintf($sql, $table));
