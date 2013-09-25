@@ -65,6 +65,62 @@ class DatabaseManager extends BaseManager
      */
     public function handle(Message $message)
     {
+        $this->insert($message);
+    }
+
+    /**
+     * Returns task messages
+     *
+     * @param array   $types  The criteria
+     * @param integer $limit  The limit
+     * @param integer $offset The offset
+     *
+     * @return array of \Sportlobster\Task\Message
+     */
+    public function fetch($criteria = array(), $limit = null, $offset = 0)
+    {
+        $messages = array();
+
+        $query = $this->getSelectQueryParts($criteria, $limit, $offset);
+        $stmt = $this->conn->prepare($query['sql']);
+        foreach ($query['params'] as $i => $param) {
+            $stmt->bindValue($i + 1, $param['value'], $param['type']);
+        }
+        $stmt->execute();
+
+        foreach ($stmt->fetchAll() as $task) {
+            $messages[] = new Message(array(
+                'id'           => $task['id'],
+                'type'         => $task['type'],
+                'body'         => json_decode($task['body'], true),
+                'state'        => $task['state'],
+                'restartCount' => $task['restart_count'],
+                'createdAt'    => new \DateTime($task['created_at']),
+                'updatedAt'    => new \DateTime($task['updated_at']),
+                'startedAt'    => $task['started_at'] ? new \DateTime($task['started_at']) : null,
+                'completedAt'  => $task['completed_at'] ? new \DateTime($task['completed_at']) : null,
+            ));
+        }
+
+        return $messages;
+    }
+
+    /**
+     * Persists a message
+     *
+     * @param \Sportlobster\Task\Message $message The message
+     */
+    public function save(Message $message)
+    {
+        if (null === $message->getId()) {
+            $this->insert($message);
+        } else {
+            $this->update($message);
+        }
+    }
+
+    protected function insert(Message $message)
+    {
         $sql = sprintf('INSERT INTO %s (type, body, state, restart_count, created_at, updated_at, started_at, completed_at) VALUES (:type, :body, :state, :restart_count, :created_at, :updated_at, :started_at, :completed_at)', $this->table);
 
         $stmt = $this->conn->prepare($sql);
@@ -87,5 +143,145 @@ class DatabaseManager extends BaseManager
         }
 
         $stmt->execute();
+    }
+
+    protected function update(Message $message)
+    {
+        $changed = $message->getChangedAttributeNames();
+
+        if (count($changed) < 1) {
+            return;
+        }
+
+        $sql = sprintf('UPDATE %s SET %%s WHERE id = :id LIMIT 1', $this->table);
+        $set = array();
+        $params = array();
+
+        foreach (array(
+            // message attribute, database field, data type, value callback (optional))
+            array('type', 'type', 'string'),
+            array('body', 'body', 'string', function($message) { return json_encode($message->getBody()); }),
+            array('state', 'state', 'integer'),
+            array('restartCount', 'restart_count', 'integer'),
+            array('createdAt', 'created_at', 'datetime'),
+            array('updatedAt', 'updated_at', 'datetime'),
+            array('startedAt', 'started_at', 'datetime'),
+            array('completedAt', 'completed_at', 'datetime'),
+        ) as $config) {
+            if (in_array($config[0], $changed)) {
+                $set[] = sprintf('%1$s = :%1$s', $config[1]);
+                $params[] = $config;
+            }
+        }
+        $params[] = array('id', 'id', 'integer');
+
+        $sql = sprintf($sql, implode(', ', $set));
+
+        $stmt = $this->conn->prepare($sql);
+
+        foreach ($params as $config) {
+            $value = empty($config[3])
+                ? call_user_func(array($message, sprintf('get%s', ucfirst($config[0])))) // use the getter
+                : call_user_func($config[3], $message) // use the callback
+            ;
+            $stmt->bindValue(
+                $config[1],
+                $value,
+                null === $value ? PDO::PARAM_NULL : $config[2]
+            );
+        }
+
+        $stmt->execute();
+    }
+
+    protected function getSelectQueryParts($criteria = array(), $limit = null, $offset = 0)
+    {
+        $sql    = sprintf('SELECT id, type, body, state, restart_count, created_at, updated_at, started_at, completed_at FROM %s', $this->table);
+        $where  = array();
+        $params = array();
+
+        foreach (array(
+            'id'            => 'integer',
+            'type'          => 'string',
+            'state'         => 'integer',
+            'restart_count' => 'integer',
+            'created_at'    => 'datetime',
+            'updated_at'    => 'datetime',
+            'started_at'    => 'datetime',
+            'completed_at'  => 'datetime',
+        ) as $field => $type) {
+            if (array_key_exists($field, $criteria)) {
+                if (!is_array($criteria[$field])) {
+                    $where[]  = sprintf('%s = ?', $field);
+                    $params[] = array(
+                        'value' => $criteria[$field],
+                        'type'  => $type,
+                    );
+                } else {
+                    foreach (array(
+                        'in'     => '%s IN (%s)',
+                        'not_in' => '%s NOT IN(%s)',
+                    ) as $operator => $condition) {
+                        if (array_key_exists($operator, $criteria[$field])) {
+                            if (!is_array($criteria[$field][$operator])) {
+                                $criteria[$field][$operator] = array($criteria[$field][$operator]);
+                            }
+                            if (count($criteria[$field][$operator])) {
+                                $where[] = sprintf($condition, $field, trim(str_repeat('?, ', count($criteria[$field][$operator])), ', '));
+                                foreach ($criteria[$field][$operator] as $value) {
+                                    $params[] = array(
+                                        'value' => $value,
+                                        'type'  => $type,
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    foreach (array(
+                        'greater_than'       => '%s > ?',
+                        'greater_than_equal' => '%s >= ?',
+                        'less_than'          => '%s < ?',
+                        'less_than_equal'    => '%s <= ?',
+                    ) as $operator => $condition) {
+                        if (array_key_exists($operator, $criteria[$field])) {
+                            if (!is_array($criteria[$field][$operator])) {
+                                $criteria[$field][$operator] = array($criteria[$field][$operator]);
+                            }
+                            foreach ($criteria[$field][$operator] as $value) {
+                                $where[]  = sprintf($condition, $field);
+                                $params[] = array(
+                                    'value' => $value,
+                                    'type'  => $type,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // WHERE
+        if (count($where) > 0) {
+            $sql .= ' WHERE '.implode(' AND ', $where);
+        }
+
+        // ORDER BY
+        $sql .= ' ORDER BY created_at, id ASC';
+
+        // LIMIT OFFSET
+        if ($limit) {
+            $sql .= ' LIMIT ? OFFSET ?';
+            $params[] = array(
+                'value' => $limit,
+                'type'  => 'integer'
+            );
+            $params[] = array(
+                'value' => $offset,
+                'type'  => 'integer'
+            );
+        }
+
+        return array('sql' => $sql, 'params' => $params);
     }
 }
