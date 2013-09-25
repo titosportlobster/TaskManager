@@ -80,7 +80,6 @@ class DatabaseManager extends BaseManager
     public function fetch($criteria = array(), $limit = null, $offset = 0)
     {
         $messages = array();
-
         $query = $this->getSelectQueryParts($criteria, $limit, $offset);
         $stmt = $this->conn->prepare($query['sql']);
         foreach ($query['params'] as $i => $param) {
