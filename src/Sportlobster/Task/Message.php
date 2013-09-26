@@ -186,24 +186,4 @@ class Message
     {
         return array_keys($this->changedAttrs);
     }
-
-    /**
-     * Returns the changed attributes with teir previous values
-     *
-     * @return array
-     */
-    public function getChangedAttributes()
-    {
-        return $this->changedAttrs;
-    }
-
-    /**
-     * Returns the names of the changed attributes
-     *
-     * @return array
-     */
-    public function getChangedAttributeNames()
-    {
-        return array_keys($this->changedAttrs);
-    }
 }
