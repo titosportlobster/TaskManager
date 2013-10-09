@@ -33,13 +33,14 @@ class Message
         $this->attrs = array(
             'id' => null,
             'type' => null,
-            'body' => null,
+            'body' => array(),
             'state' => null,
             'restartCount' => null,
             'createdAt' => null,
             'updatedAt' => null,
             'startedAt' => null,
             'completedAt' => null,
+            'logs' => array(),
         );
 
         $this->setState(self::STATE_OPEN);
@@ -56,21 +57,21 @@ class Message
             call_user_method_array(sprintf('set%s', ucfirst($attr)), $this, array($value));
         }
 
-        $this->changedAttrs = array();
-
+        $this->resetChanges();
     }
 
     public function __clone()
     {
         $this->setId(null);
-        $this->setState(self::STATE_OPEN);
         $this->setRestartCount(0);
+        $this->setState(self::STATE_OPEN);
+        $this->setLogs(array());
         $this->setCreatedAt(new \DateTime());
         $this->setUpdatedAt(new \DateTime());
         $this->setStartedAt(null);
         $this->setCompletedAt(null);
 
-        $this->changedAttrs = array();
+        $this->resetChanges();
     }
 
     public function __call($name, $arguments)
@@ -94,6 +95,61 @@ class Message
         }
 
         throw new \BadMethodCallException(sprintf('Call to undefined method "%s" for instance of class %s.', $name, get_class($this)));
+    }
+
+    /**
+     * Ads a log message
+     *
+     * The $message should be a string, \Exception instance or array with the following keys:
+     *   * time (string) - The log message time. Default is current time in ISO 8601 format (i.e. 2004-02-12T15:19:21+00:00)
+     *   * type (string) - The log message type. [debug|info|warning|error]
+     *   * message (string) - The log message.
+     *   * context (string|array) - The log message context.
+     *   * attributes (array) - The Message object attributes excluding the logs. This get added automatically and it will be overridden.
+     *
+     * @param mixed $messages
+     */
+    public function log($message)
+    {
+        if ($message instanceof \Exception) {
+            $message = array(
+                'type' => 'error',
+                'message' => $message->getMessage(),
+                'context' => get_class($message).PHP_EOL.$message->getTraceAsString()
+            );
+        }
+
+        if (is_object($message)) {
+            $message = array((string) $message);
+        }
+        if (!is_array($message)) {
+            $message = array('message' => $message);
+        }
+        if (!isset($message['type'])) {
+            $message['type'] = 'info';
+        }
+        if (!isset($message['time'])) {
+            $message['time'] = date('c');
+        }
+        if (!isset($message['message'])) {
+            $message['message'] = '';
+        }
+        if (!isset($message['context'])) {
+            $message['context'] = '';
+        }
+
+        $message['attributes'] = $this->toArray();
+        $message['attributes']['logs'] = 'REMOVED';
+
+        $logs = $this->getLogs();
+        $logs[] = array(
+            'type' => $message['type'],
+            'time' => $message['time'],
+            'attributes' => $message['attributes'],
+            'message' => $message['message'],
+            'context' => $message['context'],
+        );
+        $this->setLogs($logs);
     }
 
     /**
@@ -185,5 +241,38 @@ class Message
     public function getChangedAttributeNames()
     {
         return array_keys($this->changedAttrs);
+    }
+
+    /**
+     * Resets the changed attributes log
+     *
+     * NOTE: This method should be called AFTER the message changes have been
+     *       persisted.
+     */
+    public function resetChanges()
+    {
+        $this->changedAttrs = array();
+    }
+
+    /**
+     * Returns an array of the message attributes
+     *
+     * @return array
+     */
+    public function toArray()
+    {
+        $arr = array();
+
+        foreach (array_keys($this->attrs) as $attr) {
+            $value = call_user_func(array($this, 'get'.ucfirst($attr)));
+            if ($value instanceof \DateTime) {
+                $value = $value->format(\DateTime::ATOM);
+            } elseif (is_object($value)) {
+                $value = (string) $value;
+            }
+            $arr[$attr] = $value;
+        }
+
+        return $arr;
     }
 }

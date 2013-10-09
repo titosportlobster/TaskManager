@@ -66,6 +66,7 @@ class Console
                   `type` varchar(32) NOT NULL,
                   `body` longtext NOT NULL COMMENT 'JSON encoded data',
                   `state` tinyint(3) unsigned NOT NULL DEFAULT '0' COMMENT '0: open; 1: in progress; 2: done; 3: error; 4: cancelled',
+                  `logs` longtext NOT NULL COMMENT 'JSON encoded logs',
                   `restart_count` tinyint(4) NOT NULL DEFAULT '0',
                   `created_at` datetime NOT NULL,
                   `updated_at` datetime NOT NULL,

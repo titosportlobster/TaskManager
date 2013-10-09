@@ -93,6 +93,7 @@ class DatabaseManager extends BaseManager
                 'type'         => $task['type'],
                 'body'         => json_decode($task['body'], true),
                 'state'        => $task['state'],
+                'logs'         =>json_decode($task['logs'], true),
                 'restartCount' => $task['restart_count'],
                 'createdAt'    => new \DateTime($task['created_at']),
                 'updatedAt'    => new \DateTime($task['updated_at']),
@@ -108,25 +109,37 @@ class DatabaseManager extends BaseManager
      * Persists a message
      *
      * @param \Sportlobster\Task\Message $message The message
+     *
+     * @return boolean TRUE on success or FALSE on failure
      */
     public function save(Message $message)
     {
         if (null === $message->getId()) {
-            $this->insert($message);
+            $status = $this->insert($message);
         } else {
-            $this->update($message);
+            $status = $this->update($message);
         }
+
+        return $status;
     }
 
+    /**
+     * Persists the message
+     *
+     * @param \Sportlobster\Task\Message $message The message
+     *
+     * @return boolean TRUE on success or FALSE on failure
+     */
     protected function insert(Message $message)
     {
-        $sql = sprintf('INSERT INTO %s (type, body, state, restart_count, created_at, updated_at, started_at, completed_at) VALUES (:type, :body, :state, :restart_count, :created_at, :updated_at, :started_at, :completed_at)', $this->table);
+        $sql = sprintf('INSERT INTO %s (type, body, state, logs, restart_count, created_at, updated_at, started_at, completed_at) VALUES (:type, :body, :state, :logs, :restart_count, :created_at, :updated_at, :started_at, :completed_at)', $this->table);
 
         $stmt = $this->conn->prepare($sql);
 
         $stmt->bindValue('type', $message->getType());
         $stmt->bindValue('body', json_encode($message->getBody()));
         $stmt->bindValue('state', $message->getState(), 'integer');
+        $stmt->bindValue('logs', json_encode($message->getLogs()));
         $stmt->bindValue('restart_count', $message->getRestartCount(), 'integer');
         $stmt->bindValue('created_at', $message->getCreatedAt(), 'datetime');
         $stmt->bindValue('updated_at', $message->getUpdatedAt(), 'datetime');
@@ -141,9 +154,21 @@ class DatabaseManager extends BaseManager
             $stmt->bindValue('completed_at', $message->getCompletedAt(), 'datetime');
         }
 
-        $stmt->execute();
+        if ($status = $stmt->execute()) {
+            $message->setId($this->conn->lastInsertId());
+            $message->resetChanges();
+        }
+
+        return $status;
     }
 
+    /**
+     * Persists the message changed attributes
+     *
+     * @param \Sportlobster\Task\Message $message The message
+     *
+     * @return boolean TRUE on success or FALSE on failure
+     */
     protected function update(Message $message)
     {
         $changed = $message->getChangedAttributeNames();
@@ -161,6 +186,7 @@ class DatabaseManager extends BaseManager
             array('type', 'type', 'string'),
             array('body', 'body', 'string', function($message) { return json_encode($message->getBody()); }),
             array('state', 'state', 'integer'),
+            array('logs', 'logs', 'string', function($message) { return json_encode($message->getLogs()); }),
             array('restartCount', 'restart_count', 'integer'),
             array('createdAt', 'created_at', 'datetime'),
             array('updatedAt', 'updated_at', 'datetime'),
@@ -178,6 +204,9 @@ class DatabaseManager extends BaseManager
 
         $stmt = $this->conn->prepare($sql);
 
+        // logging context
+        $context = array('method' => __METHOD__, 'params' => array());
+
         foreach ($params as $config) {
             $value = empty($config[3])
                 ? call_user_func(array($message, sprintf('get%s', ucfirst($config[0])))) // use the getter
@@ -188,14 +217,21 @@ class DatabaseManager extends BaseManager
                 $value,
                 null === $value ? PDO::PARAM_NULL : $config[2]
             );
+            $context['params'][] = $value;
         }
 
-        $stmt->execute();
+        $this->logger && $this->logger->info($sql, $context);
+
+        if ($status = $stmt->execute()) {
+            $message->resetChanges();
+        }
+
+        return $status;
     }
 
     protected function getSelectQueryParts($criteria = array(), $limit = null, $offset = 0)
     {
-        $sql    = sprintf('SELECT id, type, body, state, restart_count, created_at, updated_at, started_at, completed_at FROM %s', $this->table);
+        $sql    = sprintf('SELECT id, type, body, state, logs, restart_count, created_at, updated_at, started_at, completed_at FROM %s', $this->table);
         $where  = array();
         $params = array();
 
@@ -280,6 +316,13 @@ class DatabaseManager extends BaseManager
                 'type'  => 'integer'
             );
         }
+
+        $this->logger && $this->logger->info($sql, array(
+            'method' => __METHOD__,
+            'criteria' => $criteria,
+            'limit' => $limit,
+            'offset' => $offset,
+        ));
 
         return array('sql' => $sql, 'params' => $params);
     }
