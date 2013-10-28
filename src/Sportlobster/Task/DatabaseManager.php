@@ -296,6 +296,13 @@ class DatabaseManager extends BaseManager
             }
         }
 
+        // convert the datetime parameters to objects
+        foreach ($params as $i => $param) {
+            if ('datetime' == $param['type'] && !$param['value'] instanceof \DateTime) {
+                $params[$i]['value'] = new \DateTime($param['value']);
+            }
+        }
+
         // WHERE
         if (count($where) > 0) {
             $sql .= ' WHERE '.implode(' AND ', $where);
