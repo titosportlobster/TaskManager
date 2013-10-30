@@ -124,6 +124,26 @@ class DatabaseManager extends BaseManager
     }
 
     /**
+     * Persists the message changed attributes
+     *
+     * @param \Sportlobster\Task\Message $message The message
+     *
+     * @return boolean TRUE on success or FALSE on failure
+     */
+    public function delete(Message $message)
+    {
+        if (null === $message->getId()) {
+            throw new \LogicException('Can not delete a message which has not been persisted.');
+        }
+
+        if (1 == $this->conn->delete($this->table, array('id' => $message->getId()))) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Persists the message
      *
      * @param \Sportlobster\Task\Message $message The message
