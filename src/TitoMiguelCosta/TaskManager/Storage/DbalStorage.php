@@ -6,6 +6,7 @@ use Doctrine\DBAL\Connection;
 use TitoMiguelCosta\TaskManager\Storage\Criteria;
 use TitoMiguelCosta\TaskManager\Storage\StorageInterface;
 use TitoMiguelCosta\TaskManager\Task;
+use TitoMiguelCosta\TaskManager\TaskInterface;
 
 class DbalStorage implements StorageInterface
 {
@@ -24,6 +25,53 @@ class DbalStorage implements StorageInterface
         $this->options = array_merge($defaults, $options);
 
         $this->setup();
+    }
+
+    public function retrieve(Criteria $criteria)
+    {
+        $query = $this->buildSql($criteria);
+
+        $results = $this->connection->executeQuery($query);
+
+        $tasks = array();
+        foreach ($results as $result) {
+            $task = new Task($result['name'], $result['status'], $result['category']);
+            $tasks[] = $task;
+        }
+
+        return $tasks;
+    }
+
+    public function store(TaskInterface $task)
+    {
+        $data = array(
+            'status' => $task->getStatus(),
+            'category' => $task->getCategory(),
+            'parameters' => json_encode($task->getLogs())
+        );
+        $this->connection->insert($this->options['tableName'], $data);
+
+
+        $where = array(
+            'name' => $task->getName(),
+            'category' => $task->getCategory()
+        );
+        $this->connection->update($this->options['tableName'], $data, $where);
+    }
+
+    public function delete(TaskInterface $task)
+    {
+        $query = "UPDATE %s SET
+            deleted_at = ?
+            WHERE name = ? AND category = ?";
+
+        $params = array(
+            date('Y-m-d H:i:s'),
+            $task->getName(),
+            $task->getCategory()
+        );
+
+        $this->connection->executeQuery($query, $params);
     }
 
     protected function setup()
@@ -61,37 +109,25 @@ class DbalStorage implements StorageInterface
         }
     }
 
-    public function retrieve(Criteria $criteria)
-    {
-        $query = $this->buildSql($criteria);
-
-        $results = $this->connection->executeQuery($query);
-
-        $tasks = array();
-        foreach ($results as $result) {
-            $task = new Task($result['name'], $result['status'], $result['category']);
-            $tasks[] = $task;
-        }
-
-        return $tasks;
-    }
-
     protected function buildSql(Criteria $criteria)
     {
         $query = "SELECT 
-            id, name, status FROM %s
+            id, name, category, status, log, parameters, created_at, updated_at, started_at, finished_at, deleted_at FROM %s
             %s
-            LIMIT %d, %d
-        ";
+            LIMIT %d, %d";
 
         $where = array();
         $name = $criteria->getName();
-        if ($name) {
+        if (null !== $name) {
             $where[] = sprintf('name = "%s"', $name);
         }
         $status = $criteria->getStatus();
-        if ($status) {
-            $where[] = sprintf('status = %d', $status);
+        if (null !== $status) {
+            $where[] = sprintf('status = "%s"', $status);
+        }
+        $category = $criteria->getCategory();
+        if (null !== $category) {
+            $where[] = sprintf('category = "%s"', $category);
         }
         $conditions = count($where) ?
             'WHERE ' . explode(' AND ', $where) :
