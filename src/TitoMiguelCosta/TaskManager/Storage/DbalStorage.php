@@ -18,7 +18,7 @@ class DbalStorage implements StorageInterface
         $this->connection = $connection;
 
         $defaults = array(
-            'tableName' => 'task'
+            'tableName' => 'task_manager'
         );
 
         $this->options = array_merge($defaults, $options);
@@ -38,8 +38,26 @@ class DbalStorage implements StorageInterface
                 break;
             }
         }
-        if (false === $tableExists){
-            
+
+        if (false === $tableExists) {
+            $query = 'CREATE TABLE IF NOT EXISTS %s (
+                id BIGINT(20) AUTO_INCREMENT,
+                name VARCHAR(255) NOT NULL,
+                category VARCHAR(128),
+                status varchar(50) NOT NULL,
+                log TEXT,
+                parameters TEXT,
+                created_at datetime DEFAULT NULL,
+                updated_at datetime DEFAULT NULL,
+                started_at datetime DEFAULT NULL,
+                finished_at datetime DEFAULT NULL,
+                deleted_at datetime DEFAULT NULL,
+                PRIMARY KEY (id),
+                UNIQUE KEY name_category (name, category),
+                KEY category (category)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8';
+
+            $this->connection->executeQuery(sprintf($query, $this->options['tableName']));
         }
     }
 
@@ -51,8 +69,7 @@ class DbalStorage implements StorageInterface
 
         $tasks = array();
         foreach ($results as $result) {
-            $task = new Task($result['name']);
-            $task->setStatus($result['status']);
+            $task = new Task($result['name'], $result['status'], $result['category']);
             $tasks[] = $task;
         }
 
@@ -77,8 +94,8 @@ class DbalStorage implements StorageInterface
             $where[] = sprintf('status = %d', $status);
         }
         $conditions = count($where) ?
-                'WHERE ' . explode(' AND ', $where) :
-                '';
+            'WHERE ' . explode(' AND ', $where) :
+            '';
 
         $page = $criteria->getPage() ? : 1;
         $count = $criteria->getCount() ? : 5;

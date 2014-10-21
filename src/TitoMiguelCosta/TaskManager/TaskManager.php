@@ -77,10 +77,10 @@ class TaskManager
                 $handler->execute($runnableTask);
             }
 
-            $posBatchEvent = new HandlerPosBatchEvent($handler, $runnableTasks);
-            $this->eventDispatcher->dispatch('tmc.task_manager.handler.pos_batch', $posBatchEvent);
+            $postBatchEvent = new HandlerPostBatchEvent($handler, $runnableTasks);
+            $this->eventDispatcher->dispatch('tmc.task_manager.handler.post_batch', $postBatchEvent);
 
-            if ($posBatchEvent->stopHandling()) {
+            if ($postBatchEvent->stopHandling()) {
                 break;
             }
         }

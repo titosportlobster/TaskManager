@@ -4,7 +4,7 @@ namespace TitoMiguelCosta\TaskManager\Event;
 
 use Symfony\Component\EventDispatcher\Event;
 
-class HandlerPosBatchEvent extends Event
+class HandlerPostBatchEvent extends Event
 {
 
     protected $handler;

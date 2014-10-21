@@ -2,7 +2,9 @@
 
 namespace TitoMiguelCosta\TaskManager;
 
-use TitoMiguelCosta\TaskManager\Storage\StorageInterface;
+use DateTime;
+use TitoMiguelCosta\TaskManager\Exception\InvalidTaskStatusException;
+use TitoMiguelCosta\TaskManager\TaskInterface;
 
 class Task implements TaskInterface, \ArrayAccess, \IteratorAggregate
 {
@@ -10,22 +12,22 @@ class Task implements TaskInterface, \ArrayAccess, \IteratorAggregate
     protected $name;
     protected $category;
     protected $status;
-    protected $storage;
     protected $parameters;
-    protected $log;
     protected $createdAt;
     protected $updatedAt;
+    protected $startedAt;
+    protected $finishedAt;
+    protected $log;
 
-    public function __construct($name, $status, StorageInterface $storage)
+    public function __construct($name, $status, $category = '')
     {
         $this->name = $name;
-        $this->storage = $storage;
-        $this->category = '';
-        $this->status = $status;
-        $this->log = array();
-        $this->createdAt = date('Y-m-d H:i:s');
-        $this->updatedAt = date('Y-m-d H:i:s');
-        $this->parameters = array();
+        $this->setStatus($status);
+        $this->category = $category;
+        $this->log = [];
+        $this->createdAt = new DateTime();
+        $this->updatedAt = new DateTime();
+        $this->parameters = [];
     }
 
     public function getName()
@@ -33,9 +35,42 @@ class Task implements TaskInterface, \ArrayAccess, \IteratorAggregate
         return $this->name;
     }
 
-    public function getStorage()
+    public function getStatus()
     {
-        return $this->storage;
+        return $this->status;
+    }
+
+    public function setStatus($status)
+    {
+        if (!in_array($status, array(
+            TaskInterface::ABORTED,
+            TaskInterface::ERROR,
+            TaskInterface::RUNNING,
+            TaskInterface::COMPLETED,
+            TaskInterface::WAITING
+        ))
+        ) {
+            throw new InvalidTaskStatusException(sprintf('The status %s is not supported', $status));
+        }
+
+        $this->status = $status;
+    }
+
+    public function addLog($message, $index = null)
+    {
+        $index = null === $index ? date('Y-m-d H:i:s') : $index;
+
+        $this->log[$index] = $message;
+    }
+
+    public function setLogs(array $logs)
+    {
+        $this->logs = $logs;
+    }
+
+    public function getLogs()
+    {
+        return $this->logs;
     }
 
     public function getParameters()
@@ -45,7 +80,7 @@ class Task implements TaskInterface, \ArrayAccess, \IteratorAggregate
 
     public function getParameter($name)
     {
-        return $this->offsetGet($name);
+        return $this->hasParameter($name) ? $this->offsetGet($name) : null;
     }
 
     public function setParameter($name, $value)
@@ -58,14 +93,84 @@ class Task implements TaskInterface, \ArrayAccess, \IteratorAggregate
         return $this->offsetExists($name);
     }
 
-    public function setStatus($status)
+    /**
+     * @param mixed $finishedAt
+     */
+    public function setFinishedAt(DateTime $finishedAt)
     {
-        $this->status = $status;
+        $this->finishedAt = $finishedAt;
     }
 
-    public function getStatus()
+    /**
+     * @return mixed
+     */
+    public function getFinishedAt()
     {
-        return $this->status;
+        return $this->finishedAt;
+    }
+
+    /**
+     * @param string $category
+     */
+    public function setCategory($category)
+    {
+        $this->category = $category;
+    }
+
+    /**
+     * @return string
+     */
+    public function getCategory()
+    {
+        return $this->category;
+    }
+
+    /**
+     * @param \DateTime $createdAt
+     */
+    public function setCreatedAt(DateTime $createdAt)
+    {
+        $this->createdAt = $createdAt;
+    }
+
+    /**
+     * @return \DateTime
+     */
+    public function getCreatedAt()
+    {
+        return $this->createdAt;
+    }
+
+    /**
+     * @param mixed $startedAt
+     */
+    public function setStartedAt(DateTime $startedAt)
+    {
+        $this->startedAt = $startedAt;
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getStartedAt()
+    {
+        return $this->startedAt;
+    }
+
+    /**
+     * @param \DateTime $updatedAt
+     */
+    public function setUpdatedAt(DateTime $updatedAt)
+    {
+        $this->updatedAt = $updatedAt;
+    }
+
+    /**
+     * @return \DateTime
+     */
+    public function getUpdatedAt()
+    {
+        return $this->updatedAt;
     }
 
     public function offsetExists($offset)
