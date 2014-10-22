@@ -9,7 +9,6 @@ use TitoMiguelCosta\TaskManager\TaskInterface;
 class Task implements TaskInterface, \ArrayAccess, \IteratorAggregate
 {
 
-    protected $name;
     protected $category;
     protected $status;
     protected $parameters;
@@ -18,21 +17,17 @@ class Task implements TaskInterface, \ArrayAccess, \IteratorAggregate
     protected $startedAt;
     protected $finishedAt;
     protected $log;
+    protected $identifier;
 
-    public function __construct($name, $status, $category = '')
+    public function __construct($category = '', $status = TaskInterface::WAITING)
     {
-        $this->name = $name;
-        $this->setStatus($status);
         $this->category = $category;
+        $this->setStatus($status);
         $this->log = [];
+        $this->parameters = [];
         $this->createdAt = new DateTime();
         $this->updatedAt = new DateTime();
-        $this->parameters = [];
-    }
-
-    public function getName()
-    {
-        return $this->name;
+        $this->identifier = null;
     }
 
     public function getStatus()
@@ -93,6 +88,11 @@ class Task implements TaskInterface, \ArrayAccess, \IteratorAggregate
         return $this->offsetExists($name);
     }
 
+    public function addParameters(array $parameters)
+    {
+        $this->parameters = $parameters;
+    }
+
     /**
      * @param mixed $finishedAt
      */
@@ -102,7 +102,7 @@ class Task implements TaskInterface, \ArrayAccess, \IteratorAggregate
     }
 
     /**
-     * @return mixed
+     * @return \DateTime
      */
     public function getFinishedAt()
     {
@@ -171,6 +171,16 @@ class Task implements TaskInterface, \ArrayAccess, \IteratorAggregate
     public function getUpdatedAt()
     {
         return $this->updatedAt;
+    }
+
+    public function getIdentifier()
+    {
+        return $this->identifier;
+    }
+
+    public function setIdentifier($id)
+    {
+        $this->identifier = $id;
     }
 
     public function offsetExists($offset)

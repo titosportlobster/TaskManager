@@ -5,8 +5,10 @@ namespace TitoMiguelCosta\TaskManager\Storage;
 use Doctrine\DBAL\Connection;
 use TitoMiguelCosta\TaskManager\Storage\Criteria;
 use TitoMiguelCosta\TaskManager\Storage\StorageInterface;
+use Doctrine\DBAL\Schema\Schema;
 use TitoMiguelCosta\TaskManager\Task;
 use TitoMiguelCosta\TaskManager\TaskInterface;
+use DateTime;
 
 class DbalStorage implements StorageInterface
 {
@@ -27,16 +29,35 @@ class DbalStorage implements StorageInterface
         $this->setup();
     }
 
-    public function retrieve(Criteria $criteria)
+    public function retrieve(Criteria $criteria = null)
     {
         $query = $this->buildSql($criteria);
 
+
         $results = $this->connection->executeQuery($query);
+        $rows = $results->fetchAll();
 
         $tasks = array();
-        foreach ($results as $result) {
-            $task = new Task($result['name'], $result['status'], $result['category']);
-            $tasks[] = $task;
+        foreach ($rows as $result) {
+            $task = new Task($result['category'], $result['status']);
+
+            $parameters = json_decode($result['parameters'], true);
+            if (JSON_ERROR_NONE === json_last_error()) {
+                $task->addParameters($parameters);
+            }
+
+            $logs = json_decode($result['logs'], true);
+            if (JSON_ERROR_NONE === json_last_error()) {
+                $task->setLogs($logs);
+            }
+
+            $task->setCreatedAt(new DateTime($result['created_at']));
+            $task->setUpdatedAt(new DateTime($result['updated_at']));
+            $task->setStartedAt(new DateTime($result['started_at']));
+            $task->setFinishedAt(new DateTime($result['finished_at']));
+            $task->setIdentifier($result['id']);
+
+            $tasks[$task->getIdentifier()] = $task;
         }
 
         return $tasks;
@@ -47,28 +68,33 @@ class DbalStorage implements StorageInterface
         $data = array(
             'status' => $task->getStatus(),
             'category' => $task->getCategory(),
-            'parameters' => json_encode($task->getLogs())
+            'parameters' => json_encode($task->getLogs()),
+            'updated_at' => date('Y-m-d H:i:s')
         );
-        $this->connection->insert($this->options['tableName'], $data);
 
+        if ($task->getIdentifier()) {
+            $where = array(
+                'id' => $task->getIdentifier()
+            );
 
-        $where = array(
-            'name' => $task->getName(),
-            'category' => $task->getCategory()
-        );
-        $this->connection->update($this->options['tableName'], $data, $where);
+            $this->connection->update($this->options['tableName'], $data, $where);
+        } else {
+            $data['created_at'] = date('Y-m-d H:i:s');
+
+            $this->connection->insert($this->options['tableName'], $data);
+        }
     }
 
     public function delete(TaskInterface $task)
     {
-        $query = "UPDATE %s SET
+        $query = 'UPDATE %s SET
             deleted_at = ?
-            WHERE name = ? AND category = ?";
+            WHERE id = ?
+            LIMIT 1';
 
         $params = array(
             date('Y-m-d H:i:s'),
-            $task->getName(),
-            $task->getCategory()
+            $task->getIdentifier()
         );
 
         $this->connection->executeQuery($query, $params);
@@ -77,66 +103,62 @@ class DbalStorage implements StorageInterface
     protected function setup()
     {
         $schemaManager = $this->connection->getSchemaManager();
-        $tables = $schemaManager->getTables();
 
-        $tableExists = false;
-        foreach ($tables as $table) {
-            if ($this->options['tableName'] === $table->getName()) {
-                $tableExists = true;
-                break;
+        if (!$schemaManager->tablesExist(array($this->options['tableName']))) {
+            $schema = new Schema();
+            $table = $schema->createTable($this->options['tableName']);
+            $table->addColumn('id', 'integer', array('unsigned' => true));
+            $table->addColumn('category', 'string', array('length' => 128));
+            $table->addColumn('status', 'string', array('length' => 50));
+            $table->addColumn('logs', 'text', array('notnull' => false));
+            $table->addColumn('parameters', 'text', array('notnull' => false));
+            $table->addColumn('created_at', 'datetime', array('notnull' => false));
+            $table->addColumn('updated_at', 'datetime', array('notnull' => false));
+            $table->addColumn('started_at', 'datetime', array('notnull' => false));
+            $table->addColumn('finished_at', 'datetime', array('notnull' => false));
+            $table->addColumn('deleted_at', 'datetime', array('notnull' => false));
+            $table->setPrimaryKey(array('id'));
+            $table->addUniqueIndex(array('category'));
+
+            $queries = $schema->toSql($this->connection->getDatabasePlatform());
+            foreach ($queries as $query) {
+                $this->connection->executeQuery($query);
             }
-        }
-
-        if (false === $tableExists) {
-            $query = 'CREATE TABLE IF NOT EXISTS %s (
-                id BIGINT(20) AUTO_INCREMENT,
-                name VARCHAR(255) NOT NULL,
-                category VARCHAR(128),
-                status varchar(50) NOT NULL,
-                log TEXT,
-                parameters TEXT,
-                created_at datetime DEFAULT NULL,
-                updated_at datetime DEFAULT NULL,
-                started_at datetime DEFAULT NULL,
-                finished_at datetime DEFAULT NULL,
-                deleted_at datetime DEFAULT NULL,
-                PRIMARY KEY (id),
-                UNIQUE KEY name_category (name, category),
-                KEY category (category)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8';
-
-            $this->connection->executeQuery(sprintf($query, $this->options['tableName']));
         }
     }
 
-    protected function buildSql(Criteria $criteria)
+    protected function buildSql(Criteria $criteria = null)
     {
-        $query = "SELECT 
-            id, name, category, status, log, parameters, created_at, updated_at, started_at, finished_at, deleted_at FROM %s
+        $query = 'SELECT
+            id, category, status, logs, parameters, created_at, updated_at, started_at, finished_at FROM %s
             %s
-            LIMIT %d, %d";
+            LIMIT %d, %d';
 
-        $where = array();
-        $name = $criteria->getName();
-        if (null !== $name) {
-            $where[] = sprintf('name = "%s"', $name);
+        $where = [
+            'deleted_at IS NULL'
+        ];
+
+        if (false === $criteria instanceof Criteria) {
+            $criteria = new Criteria();
         }
+
         $status = $criteria->getStatus();
         if (null !== $status) {
             $where[] = sprintf('status = "%s"', $status);
         }
+
         $category = $criteria->getCategory();
         if (null !== $category) {
             $where[] = sprintf('category = "%s"', $category);
         }
+
         $conditions = count($where) ?
-            'WHERE ' . explode(' AND ', $where) :
+            'WHERE ' . implode(' AND ', $where) :
             '';
 
-        $page = $criteria->getPage() ? : 1;
+        $page = $criteria->getPage() ? : 0;
         $count = $criteria->getCount() ? : 5;
 
         return sprintf($query, $this->options['tableName'], $conditions, $page, $count);
     }
-
 }

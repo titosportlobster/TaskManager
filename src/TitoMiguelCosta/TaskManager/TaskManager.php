@@ -3,10 +3,10 @@
 namespace TitoMiguelCosta\TaskManager;
 
 use Symfony\Component\EventDispatcher\EventDispatcher;
-use TitoMiguelCosta\TaskManager\Event\HandlerPosBatchEvent;
+use TitoMiguelCosta\TaskManager\Event\HandlerPostBatchEvent;
 use TitoMiguelCosta\TaskManager\Event\HandlerPreBatchEvent;
-use TitoMiguelCosta\TaskManager\HandlerInterface;
-use TitoMiguelCosta\TaskManager\StorageInterface;
+use TitoMiguelCosta\TaskManager\Handler\HandlerInterface;
+use TitoMiguelCosta\TaskManager\Storage\StorageInterface;
 use TitoMiguelCosta\TaskManager\Storage\Criteria;
 
 class TaskManager
@@ -68,7 +68,7 @@ class TaskManager
             $preBatchEvent = new HandlerPreBatchEvent($handler, $tasks);
             $this->eventDispatcher->dispatch('tmc.task_manager.handler.pre_batch', $preBatchEvent);
 
-            if ($preBatchEvent->handle()) {
+            if (!$preBatchEvent->handle()) {
                 continue;
             }
 

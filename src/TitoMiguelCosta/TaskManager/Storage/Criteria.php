@@ -8,7 +8,7 @@ class Criteria
     protected $category = null;
     protected $status = null;
     protected $page = null;
-    protected $limit = null;
+    protected $count = null;
 
     /**
      * @param null $category
@@ -29,33 +29,17 @@ class Criteria
     /**
      * @param null $limit
      */
-    public function setLimit($limit)
+    public function setCount($count)
     {
-        $this->limit = $limit;
+        $this->count = $count;
     }
 
     /**
      * @return null
      */
-    public function getLimit()
+    public function getCount()
     {
-        return $this->limit;
-    }
-
-    /**
-     * @param null $name
-     */
-    public function setName($name)
-    {
-        $this->name = $name;
-    }
-
-    /**
-     * @return null
-     */
-    public function getName()
-    {
-        return $this->name;
+        return $this->count;
     }
 
     /**

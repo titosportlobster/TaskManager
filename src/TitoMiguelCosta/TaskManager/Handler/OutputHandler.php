@@ -17,7 +17,7 @@ class OutputHandler implements HandlerInterface
 
     public function execute(TaskInterface $task)
     {
-        $this->output->writeln(sprintf('Executing the task "%s"', $task->getName()));
+        $this->output->writeln(sprintf('Executing the task "%s"', $task->getCategory()));
     }
 
 }

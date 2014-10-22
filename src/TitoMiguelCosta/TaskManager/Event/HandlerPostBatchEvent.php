@@ -3,6 +3,7 @@
 namespace TitoMiguelCosta\TaskManager\Event;
 
 use Symfony\Component\EventDispatcher\Event;
+use TitoMiguelCosta\TaskManager\Handler\HandlerInterface;
 
 class HandlerPostBatchEvent extends Event
 {

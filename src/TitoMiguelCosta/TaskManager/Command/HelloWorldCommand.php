@@ -20,15 +20,14 @@ class HelloWorldCommand extends Command
     protected function configure()
     {
         $this
-                ->setName('task-manager:hello-world')
-                ->setDescription('Hello World')
-                ->addArgument(
-                        'name', InputArgument::OPTIONAL, 'Who do you want to greet?'
-                )
-                ->addOption(
-                        'yell', null, InputOption::VALUE_NONE, 'If set, the task will yell in uppercase letters'
-                )
-        ;
+            ->setName('task-manager:hello-world')
+            ->setDescription('Hello World')
+            ->addArgument(
+                'name', InputArgument::OPTIONAL, 'Who do you want to greet?'
+            )
+            ->addOption(
+                'yell', null, InputOption::VALUE_NONE, 'If set, the task will yell in uppercase letters'
+            );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output)
@@ -40,7 +39,7 @@ class HelloWorldCommand extends Command
         $taskManager->addStorage($dbalStorage);
 
         $taskManager->addHandler(new OutputHandler($output));
-        
+
         $taskManager->handle();
     }
 
@@ -52,9 +51,32 @@ class HelloWorldCommand extends Command
             'memory' => true,
         );
         $connection = DriverManager::getConnection($connectionParams, $config);
-        $dbalStorage = new DbalStorage($connection);
+        $options = ['tableName' => 'task_manager'];
+
+        $dbalStorage = new DbalStorage($connection, $options);
+
+        $this->loadFixtures($connection, $options['tableName']);
 
         return $dbalStorage;
+    }
+
+    protected function loadFixtures($connection, $tableName)
+    {
+        $data = [
+            'category' => 'hello.world',
+            'status' => 0,
+            'logs' => '[]',
+            'parameters' => '[]',
+        ];
+        $connection->insert($tableName, $data);
+
+        $data = [
+            'category' => 'bye_bye.world',
+            'status' => 0,
+            'logs' => '[]',
+            'parameters' => '[]',
+        ];
+        $connection->insert($tableName, $data);
     }
 
 }
