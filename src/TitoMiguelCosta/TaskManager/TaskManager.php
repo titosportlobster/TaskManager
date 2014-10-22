@@ -47,22 +47,14 @@ class TaskManager
 
     public function handle(Criteria $criteria = null)
     {
-        $tasks = $this->retrieveTasks($criteria);
-
-        $this->executeTasks($tasks);
-    }
-
-    protected function retrieveTasks(Criteria $criteria = null)
-    {
-        $tasks = array();
         foreach ($this->storages as $storage) {
-            $tasks = array_merge($tasks, $storage->retrieve($criteria));
+            $tasks = $storage->retrieve($criteria);
+            $this->executeTasks($storage, $tasks);
         }
 
-        return $tasks;
     }
 
-    protected function executeTasks(array $tasks)
+    protected function executeTasks(StorageInterface $storage, array $tasks)
     {
         foreach ($this->handlers as $handler) {
             $preBatchEvent = new HandlerPreBatchEvent($handler, $tasks);
@@ -75,6 +67,7 @@ class TaskManager
             $runnableTasks = $preBatchEvent->getTasks();
             foreach ($runnableTasks as $runnableTask) {
                 $handler->execute($runnableTask);
+                $storage->store($runnableTask);
             }
 
             $postBatchEvent = new HandlerPostBatchEvent($handler, $runnableTasks);

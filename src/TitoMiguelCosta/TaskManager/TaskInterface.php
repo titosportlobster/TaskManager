@@ -16,6 +16,8 @@ interface TaskInterface
     public function getCategory();
 
     public function getStatus();
+    
+    public function setStatus($status);
 
     public function getLogs();
 

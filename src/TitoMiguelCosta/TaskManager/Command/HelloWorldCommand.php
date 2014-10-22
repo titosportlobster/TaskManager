@@ -10,6 +10,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Configuration;
+use TitoMiguelCosta\TaskManager\Storage\Criteria;
 use TitoMiguelCosta\TaskManager\TaskManager;
 use TitoMiguelCosta\TaskManager\Storage\DbalStorage;
 use TitoMiguelCosta\TaskManager\Handler\OutputHandler;
@@ -40,7 +41,10 @@ class HelloWorldCommand extends Command
 
         $taskManager->addHandler(new OutputHandler($output));
 
-        $taskManager->handle();
+        $criteria = new Criteria();
+        $criteria->setCategory('hello.world');
+
+        $taskManager->handle($criteria);
     }
 
     protected function getDbalStorage()
